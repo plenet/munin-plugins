@@ -57,7 +57,7 @@ if($argv[1] == "cron"){
 	// exec("timeout 2 w_scan -f c -c DE 2>/dev/null", $output);
 
 	foreach($freqs as $freq){
-		exec("dvbtune -f ".($freq * 1000000)." -s 6952 2> /dev/null", $output); # Tune to frequency
+		exec("timeout 10 dvbtune -f ".($freq * 1000000)." -s 6952 2> /dev/null", $output); # Tune to frequency
 		exec("timeout 3 dvbsnoop -adapter 0 -s bandwidth 8190 -n 5000 -hideproginfo", $output);
 		$avg = $output[(count($output)-2)];
 		$kbits = preg_replace("/^.+Avrg:\s+([0-9\.]+)\s+.+$/", "$1", $avg) * 1000;
