@@ -1,0 +1,80 @@
+#!/usr/bin/php
+<?php
+error_reporting(0);
+
+$tmpfile = "/tmp/kdgsegments.txt";
+
+$freqs = array( # Kanäle (MHz)
+	546, 554, 562, 570, 578, 586, 594, 602, 666, 674, 682, 690,
+	698, 706, 714, 722, 762, 770, 778, 786, 794, 802, 810, 818
+);
+
+
+### Munin Config ausgeben
+if($argv[1] == "config"){
+
+$noOfColors = count($freqs);
+$frequency = 2*pi()/$noOfColors;
+for ($i = 0; $i < $noOfColors; ++$i){
+	$r = str_pad(dechex(round(sin($frequency * $i + 0) * 127 + 128)), 2, "0");
+	$g = str_pad(dechex(round(sin($frequency * $i + 2*pi()/3) * 127 + 128)), 2, "0");
+	$b = str_pad(dechex(round(sin($frequency * $i + 4*pi()/3) * 127 + 128)), 2, "0");
+	$colours[$i] = "$r$g$b";
+}
+
+?>
+graph_title KD Segmentauslastung DOCSIS Alfeld
+graph_args --base 1024 -l 0 -u 400000
+graph_vlabel Bit/s
+graph_info Anzeige der Auslastung der Downstream Kanaele KD in Alfeld
+graph_category docsis
+<?php
+$icolour = 0;
+foreach($freqs as $freq){
+	echo "f".$freq.".label ".$freq." MHz\n";
+	if($configfirstline++ < 1)
+	  echo "f".$freq.".draw AREA\n";
+	else
+	  echo "f".$freq.".draw STACK\n";
+	echo "f".$freq.".colour ".$colours[$icolour++]."\n";
+}
+?>
+sum.label Summe
+sum.draw LINE1
+sum.colour 000000
+<?php
+  exit;
+ }
+
+### Scan und in File schreiben (als cron ausführen)
+if($argv[1] == "cron"){
+	file_put_contents("/sys/module/dvb_core/parameters/dvb_powerdown_on_sleep", "0");
+	if(file_exists("/dev/dvb/adapter0/frontend1")){
+		unlink("/dev/dvb/adapter0/frontend0");
+		rename("/dev/dvb/adapter0/frontend1", "/dev/dvb/adapter0/frontend0");
+	}
+	exec("echo 0 | dvb-fe-tool -d DVBC/ANNEX_A 2>/dev/null", $output);
+	// exec("timeout 2 w_scan -f c -c DE 2>/dev/null", $output);
+
+	foreach($freqs as $freq){
+		exec("dvbtune -f ".($freq * 1000000)." -s 6952 2> /dev/null", $output); # Tune to frequency
+		exec("timeout 3 dvbsnoop -adapter 0 -s bandwidth 8190 -n 5000 -hideproginfo", $output);
+		$avg = $output[(count($output)-2)];
+		$kbits = preg_replace("/^.+Avrg:\s+([0-9\.]+)\s+.+$/", "$1", $avg) * 1000;
+		echo "f".$freq.".value ".$kbits."\n";
+		$tmpout .= "f".$freq.".value ".$kbits."\n";
+		$sum += $kbits;
+	}
+	echo "sum.value ".$sum."\n";
+	$tmpout .= "sum.value ".$sum."\n";
+	file_put_contents($tmpfile, $tmpout);
+	exit;
+}
+
+
+### Werte ausgeben (normaler munin run)
+if(filemtime($tmpfile) > (time()-300)){
+	readfile($tmpfile);
+}
+
+?>
