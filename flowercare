@@ -1,0 +1,92 @@
+#!/usr/bin/php
+<?php
+error_reporting(0);
+
+### config
+$tmpfile = "/tmp/flowercare.txt";
+
+$flowercare['1'] = "C4:7C:8D:66:1B:AC"; # Bergpalme
+$flowercare['2'] = "C4:7C:8D:66:19:CD"; # Goldfruchtpalme
+$flowercare['3'] = "C4:7C:8D:65:CF:E1"; # Bogenhanf
+$flowercare['4'] = "C4:7C:8D:66:4D:20"; # Drachenbaum
+$flowercare['5'] = "C4:7C:8D:66:4B:96"; # Zyperngras
+
+
+ if($argv[1] == "config"){
+?>
+graph_title Flower Care
+graph_category plants
+graph_args -l 0 -u 100 -r
+graph_vlabel %
+<?php
+foreach($flowercare as $id => $val){
+	echo "plant".$id."_battery.label plant".$id." battery\n";
+	echo "plant".$id."_battery.draw LINE1\n";
+	echo "plant".$id."_battery.colour ff0000\n";
+	echo "plant".$id."_light.label plant".$id." light\n";
+	echo "plant".$id."_light.draw LINE2\n";
+	echo "plant".$id."_light.colour EDF000\n";
+	echo "plant".$id."_temperature.label plant".$id." temperature\n";
+	echo "plant".$id."_temperature.draw LINE1\n";
+	echo "plant".$id."_temperature.colour C000C0\n";
+	echo "plant".$id."_moisture.label plant".$id." moisture\n";
+	echo "plant".$id."_moisture.draw LINE3\n";
+	echo "plant".$id."_moisture.colour 0000ff\n";
+}
+
+
+  exit;
+ }
+
+### Werte ausgeben
+ if($argv[1] == "cron"){
+
+	### enable bluetooth
+	exec("echo 'power on' |bluetoothctl 2>/dev/null", $result);
+	
+foreach($flowercare as $id => $val){
+	$data = FlowerCare($val);
+	echo "plant".$id."_temperature.value ".	$data['temperature']."\n";
+	echo "plant".$id."_moisture.value ".	$data['moisture']."\n";
+	echo "plant".$id."_battery.value ".		$data['battery']."\n";
+	echo "plant".$id."_light.value ".		$data['light']."\n";
+}
+
+ exit;
+ }
+ 
+ if(filemtime($tmpfile) > (time() - 60 * 20)){
+	 readfile($tmpfile);
+ }
+ 
+ 
+############################# Funktionen #############################	   
+ function FlowerCare($mac){
+  $cmd = "/usr/local/src/miflora/demo.py --backend gatttool poll ";
+	exec($cmd.$mac, $result);
+	
+	foreach($result as $line){
+		if(preg_match("/Temperature/", $line)){
+			$output['temperature'] = preg_replace("/^.+ (.+)$/", "$1", $line);
+		} 
+		if(preg_match("/Moisture/", $line)){
+			$output['moisture'] = preg_replace("/^.+ (.+)$/", "$1", $line);
+		} 
+		if(preg_match("/Conductivity/", $line)){
+			$output['conductivity'] = preg_replace("/^.+ (.+)$/", "$1", $line);
+		} 
+		if(preg_match("/Light/", $line)){
+			$output['light'] = preg_replace("/^.+ (.+)$/", "$1", $line) / 2000;
+		} 
+		if(preg_match("/Battery/", $line)){
+			$output['battery'] = preg_replace("/^.+ (.+)$/", "$1", $line);
+		} 
+		if(preg_match("/FW:/", $line)){
+			$output['fw'] = preg_replace("/^.+ (.+)$/", "$1", $line);
+		} 
+	}
+  return $output;
+ }
+
+ 
+?>
